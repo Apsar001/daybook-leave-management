@@ -1,0 +1,27 @@
+{
+  "name": "leave-management-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-quality Leave Management System monorepo",
+  "scripts": {
+    "setup": "npm install && npm --prefix backend install && npm --prefix frontend install",
+    "dev": "npm-run-all --parallel dev:backend dev:frontend",
+    "dev:backend": "npm --prefix backend run start:dev",
+    "dev:frontend": "npm --prefix frontend start",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "npm --prefix backend run build",
+    "build:frontend": "npm --prefix frontend run build",
+    "test": "npm --prefix backend test",
+    "test:backend": "npm --prefix backend test",
+    "test:frontend": "npm --prefix frontend test -- --watch=false",
+    "migration:run": "npm --prefix backend run migration:run",
+    "migration:revert": "npm --prefix backend run migration:revert",
+    "seed": "npm --prefix backend run seed",
+    "format": "npm --prefix backend run format && npm --prefix frontend run format",
+    "lint": "npm --prefix backend run lint"
+  },
+  "devDependencies": {
+    "npm-run-all": "4.1.5",
+    "prettier": "3.6.2"
+  }
+}
