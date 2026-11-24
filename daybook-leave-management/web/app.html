@@ -50,6 +50,8 @@
         {{busy?'Signing in…':'Sign in'}}
       </button>
     </form>
+    <div #googleSlot class="google-signin"></div>
+    <p *ngIf="googleStatus" role="status">{{googleStatus}}</p>
   </section>
 </div>
 <div *ngIf="s" class="shell">

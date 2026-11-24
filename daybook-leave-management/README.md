@@ -23,6 +23,17 @@ The sign-in page prefills a local demo account for each role. All seeded account
 | Second manager | dev@daybook.test | Review Noah, Tara, Leo and Zara |
 | Admin | ira@daybook.test | Configure types, allowances, minimum notice and daily cap |
 
+## Google sign-in
+
+Create a Google OAuth client of type **Web application** and register the exact JavaScript origin used by the browser (for example `http://localhost:8130`). Set the public client ID in the server environment before starting Daybook:
+
+```powershell
+$env:GOOGLE_CLIENT_ID = "YOUR_CLIENT_ID.apps.googleusercontent.com"
+npm.cmd start
+```
+
+An administrator must provision the employee’s verified Gmail or Google Workspace address in `people.email` before first sign-in. Daybook links the Google account to that employee and keeps the existing role. The seeded `@daybook.test` accounts support the password demo. For hosted deployments, set the same variable and register the HTTPS origin.
+
 ## Architecture and rules
 
 Angular submits JSON over same-origin HTTP. NestJS authenticates the request, loads the user's current role and manager relationship, and calls the business rules. The PostgreSQL driver uses a connection pool and parameterized SQL. One checked-out connection owns each transaction and is released in a finally block.

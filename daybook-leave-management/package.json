@@ -5,7 +5,7 @@
   "scripts": {
     "build:vercel": "npm run build && node scripts/package-vercel.mjs",
     "build": "tsc && node scripts/build.mjs",
-    "start": "node scripts/start.mjs",
+    "start": "node --env-file-if-exists=.env scripts/start.mjs",
     "test": "npm run build && node --test tests/leave.test.mjs"
   },
   "keywords": [],
@@ -26,6 +26,7 @@
     "bcryptjs": "^3.0.3",
     "embedded-postgres": "18.7.0-beta.19",
     "esbuild": "0.28.2",
+    "google-auth-library": "^11.3.4",
     "jsonwebtoken": "^9.0.3",
     "pg": "8.23.1",
     "reflect-metadata": "0.2.2",

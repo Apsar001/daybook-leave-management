@@ -1,6 +1,8 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import jwt from "jsonwebtoken";
+import { OAuth2Client } from "google-auth-library";
+import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import api from "../dist/api/main.cjs";
@@ -50,6 +52,7 @@ before(async () => {
   cluster = await localCluster(tmp, 55443);
   process.env.DATABASE_URL = cluster.url;
   process.env.JWT_SECRET = randomUUID();
+  process.env.GOOGLE_CLIENT_ID = "test.apps.googleusercontent.com";
   process.env.DEMO_PASSWORD = "DaybookDemo!42";
   ({ app, pool } = await api.createApp());
   await app.listen(0, "127.0.0.1");
@@ -217,4 +220,26 @@ test("invalid role, reason and numeric configuration rejected", async () => {
     (await action("policy", { notice: -1, capacity: 0 }, admin)).status,
     400,
   );
+});
+
+test("Google sign-in verifies credentials and links only a provisioned account", async (t) => {
+  const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  t.mock.method(OAuth2Client.prototype, "getFederatedSignonCertsAsync", async () => ({
+    certs: { test: publicKey.export({ format: "pem", type: "spki" }) },
+  }));
+  const clientId = (await call("auth/google-config")).data.clientId;
+  const claims = { sub: "12345", email: "test.employee@gmail.com", email_verified: true, aud: clientId };
+  const signIn = (changes = {}) => call("auth/google", null, { credential: jwt.sign(
+    { ...claims, ...changes }, privateKey, { algorithm: "RS256", keyid: "test", issuer: "https://accounts.google.com", expiresIn: "5m" },
+  ) });
+  assert.equal((await signIn({ aud: "another-app" })).status, 401);
+  assert.equal((await signIn()).status, 403);
+  await pool.query("insert into people(name,email,password_hash,role) values ('Google test',$1,'disabled','employee')", [claims.email]);
+  assert.equal((await signIn({ email_verified: false })).status, 403);
+  const login = await signIn();
+  assert.equal(login.status, 201);
+  assert.match(login.cookie, /HttpOnly/i);
+  assert.equal((await call("workspace", login.data.token)).status, 200);
+  assert.equal((await signIn({ sub: "other-account" })).status, 403);
+  assert.equal((await signIn({ email: "renamed@gmail.com" })).status, 201);
 });

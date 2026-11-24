@@ -13,7 +13,7 @@ await copyFile("dist/api/main.cjs", root + "/server.cjs");
 await copyFile("scripts/hosted-handler.cjs", root + "/api/daybook.js");
 const { dependencies } = JSON.parse(await readFile("package.json", "utf8"));
 const names = ["@nestjs/common", "@nestjs/core", "@nestjs/platform-express", "pg",
-  "reflect-metadata", "rxjs", "bcryptjs", "jsonwebtoken"];
+  "reflect-metadata", "rxjs", "bcryptjs", "jsonwebtoken", "google-auth-library"];
 const runtime = Object.fromEntries(names.map(name => [name, dependencies[name]]));
 await writeFile(root + "/package.json", JSON.stringify({
   name: "daybook-leave", private: true, engines: { node: "22.x" }, dependencies: runtime

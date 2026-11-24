@@ -3,7 +3,7 @@ module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   const url = new URL(req.url, "http://localhost");
   const route = url.searchParams.get("route") || url.pathname.slice(5);
-  if (!/^(workspace|auth\/(login|refresh|logout)|actions\/(request|approve|reject|cancel|policy|type))$/.test(route)) {
+  if (!/^(workspace|auth\/(login|refresh|logout|google|google-config)|actions\/(request|approve|reject|cancel|policy|type))$/.test(route)) {
     res.statusCode = 404;
     return res.end();
   }

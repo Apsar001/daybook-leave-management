@@ -2,6 +2,7 @@ create table if not exists people (
  id serial primary key, name text not null, email text unique not null, password_hash text not null,
  role text not null check(role in ('employee','manager','admin')), manager int references people
 );
+alter table people add column if not exists google_subject text unique;
 create table if not exists policy(id int primary key check(id=1), notice int not null check(notice>=0), capacity int not null check(capacity>0));
 create table if not exists kinds(id serial primary key,name text unique not null,allowance int not null check(allowance>=0));
 create table if not exists holidays(day date primary key,name text not null);

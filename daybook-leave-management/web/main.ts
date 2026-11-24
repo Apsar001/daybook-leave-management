@@ -1,6 +1,6 @@
 import "zone.js";
 import "@angular/compiler";
-import { Component, provideZoneChangeDetection } from "@angular/core";
+import { Component, ElementRef, NgZone, ViewChild, inject, provideZoneChangeDetection } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { bootstrapApplication } from "@angular/platform-browser";
@@ -101,12 +101,43 @@ class Daybook {
       this.busy = false;
     }
   }
-  login() {
-    return this.run(async () => {
-      const r = await this.api("auth/login", {
-        email: this.email,
-        password: this.password,
+  googleStatus = "";
+  private readonly zone = inject(NgZone);
+  private googleScript?: Promise<void>;
+  @ViewChild("googleSlot") set googleSlot(slot: ElementRef<HTMLElement> | undefined) {
+    if (slot) void this.renderGoogle(slot.nativeElement);
+  }
+  private async renderGoogle(host: HTMLElement) {
+    try {
+      const { clientId } = await this.api("auth/google-config");
+      if (!clientId) {
+        this.googleStatus = "Google sign-in is awaiting setup.";
+        return;
+      }
+      this.googleScript ??= new Promise<void>((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://accounts.google.com/gsi/client";
+        script.onload = () => resolve();
+        script.onerror = () => { this.googleScript = undefined; reject(Error()); };
+        document.head.appendChild(script);
       });
+      await this.googleScript;
+      if (!host.isConnected) return;
+      const id = (window as any).google.accounts.id;
+      id.initialize({ client_id: clientId, auto_select: false, callback: ({ credential }: { credential: string }) =>
+        this.zone.run(() => this.signIn("google", { credential })) });
+      this.googleStatus = "";
+      id.renderButton(host, { theme: "outline", size: "large" });
+    } catch {
+      this.googleStatus = "Google sign-in could not load. Refresh to retry.";
+    }
+  }
+  login() {
+    return this.signIn("login", { email: this.email, password: this.password });
+  }
+  private signIn(method: "login" | "google", body: Record<string, string>) {
+    return this.run(async () => {
+      const r = await this.api("auth/" + method, body);
       sessionStorage.setItem("jwt-token", r.token);
       await this.load();
     });

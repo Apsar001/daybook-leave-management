@@ -15,6 +15,7 @@ import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { Pool, PoolClient } from "pg";
 import { compare } from "bcryptjs";
+import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { resolve } from "node:path";
@@ -105,8 +106,13 @@ export async function createApp() {
       }),
     };
   }
+  const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const google = new OAuth2Client();
   @Controller("api")
   class LeaveController {
+    @Get("auth/google-config") googleConfig() {
+      return { clientId: googleClientId || null };
+    }
     @Post("auth/:action") async auth(
       @Param("action") op: string,
       @Req() req: any,
@@ -114,34 +120,59 @@ export async function createApp() {
       @Body() b: any,
     ) {
       const refresh = randomBytes(48).toString("hex");
+      let googleIdentity: { sub: string; email: string } | undefined;
+      if (op === "google") {
+        requireValue(googleClientId, "Google sign-in is not configured.", 503);
+        requireValue(typeof b?.credential === "string" && b.credential.length > 0 &&
+          b.credential.length <= 8192, "Missing or invalid Google credential.", 400);
+        const id = await google.verifyIdToken({ idToken: b.credential, audience: googleClientId })
+          .catch(() => { throw new HttpException("Google sign-in could not be verified. Try again.", 401); });
+        const claims = id.getPayload();
+        if (!claims?.sub || !claims.email || !claims.email_verified ||
+            !(claims.hd || claims.email.toLowerCase().endsWith("@gmail.com")))
+          throw new HttpException("Use a verified Gmail or Google Workspace address.", 403);
+        googleIdentity = { sub: claims.sub, email: claims.email.toLowerCase() };
+      }
       const result = await transaction(async (db) => {
-        if (op === "login") {
-          requireValue(
-            typeof b.email === "string" &&
-              b.email.length < 255 &&
-              typeof b.password === "string" &&
-              b.password.length <= 128,
-            "Enter email and password.",
-          );
-          const u = (
-            await db.query("select * from people where email=$1", [
-              b.email.trim().toLowerCase(),
-            ])
-          ).rows[0];
-          requireValue(
-            u && (await compare(b.password, u.password_hash)),
-            "Incorrect email or password.",
-            401,
-          );
+        if (op === "login" || googleIdentity) {
+          let personId: number;
+          if (googleIdentity) {
+            const linked = await db.query("select id from people where google_subject=$1", [googleIdentity.sub]);
+            const person = linked.rows[0] || (await db.query(
+              "update people set google_subject=$1 where email=$2 and google_subject is null returning id",
+              [googleIdentity.sub, googleIdentity.email],
+            )).rows[0];
+            requireValue(person, "This Google account has no Daybook workspace access.", 403);
+            personId = person.id;
+          } else {
+            requireValue(
+              typeof b.email === "string" &&
+                b.email.length < 255 &&
+                typeof b.password === "string" &&
+                b.password.length <= 128,
+              "Enter email and password.",
+            );
+            const u = (
+              await db.query("select * from people where email=$1", [
+                b.email.trim().toLowerCase(),
+              ])
+            ).rows[0];
+            requireValue(
+              u && (await compare(b.password, u.password_hash)),
+              "Incorrect email or password.",
+              401,
+            );
+            personId = u.id;
+          }
           const sid = randomUUID();
           await db.query(
             "insert into sessions values($1,$2,$3,now()+interval '8 hours')",
-            [sid, u.id, digest(refresh)],
+            [sid, personId, digest(refresh)],
           );
           await db.query("insert into audit(actor,action) values($1,'login')", [
-            u.id,
+            personId,
           ]);
-          return ticket(u.id, sid);
+          return ticket(personId, sid);
         }
         if (op === "refresh") {
           const row = (
